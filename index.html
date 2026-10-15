@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bill of Supply Maker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+    /* Layout: deep-green banner, then one colour-coded card per section (seller, buyer, invoice, goods, bank, remarks).
+       Fixed data is shaded text; the only typed-in cells in the goods table are the yellow quantity boxes. */
+    :root {
+        --bg: #e8f1ec;
+        --card: #ffffff;
+        --fg: #17211c;
+        --muted: #55645c;
+        --line: #cfdcd4;
+        --field: #ffffff;
+        --field-line: #aebfb4;
+        --lock-bg: #eef3f0;
+        --hero: #145c43;
+        --hero-bar: #f2b01e;
+        --accent: #c2410c;
+        --accent-fg: #ffffff;
+        --quiet: #4b5a52;
+        --quiet-fg: #ffffff;
+        --qty-bg: #fff7d1;
+        --qty-line: #d4a50a;
+        --calc: #0b5d3b;
+        --on-sec: #ffffff;
+        --s-seller: #3b4fb8;  --t-seller: #e9ecfb;
+        --s-buyer: #0e7c86;   --t-buyer: #e2f4f5;
+        --s-meta: #a35700;    --t-meta: #fff1dc;
+        --s-items: #1e7a46;   --t-items: #e6f4ea;  --th-items: #cde8d6;
+        --s-bank: #7a3fa8;    --t-bank: #f1e8f9;
+        --s-remarks: #b33a3a; --t-remarks: #fbe9e8;
+        --danger: #b3261e;
+        --font: "Segoe UI", "DejaVu Sans", Arial, sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+            --bg: #0e1512; --card: #17211c; --fg: #e6efe9; --muted: #9db0a5; --line: #2a3a32;
+            --field: #101815; --field-line: #3c5045; --lock-bg: #1b2721; --hero: #0f4331; --hero-bar: #e0a31a;
+            --accent: #f08a54; --accent-fg: #1a0e06; --quiet: #34463c; --quiet-fg: #e6efe9;
+            --qty-bg: #2b2608; --qty-line: #8a7414; --calc: #7fdca9;
+            --s-seller: #4a5fcb;  --t-seller: #181e3d;
+            --s-buyer: #12929d;   --t-buyer: #0e2b2e;
+            --s-meta: #b8650a;    --t-meta: #302210;
+            --s-items: #238a50;   --t-items: #11301f;  --th-items: #1d3d2c;
+            --s-bank: #8d4fbf;    --t-bank: #281937;
+            --s-remarks: #c04848; --t-remarks: #301a1a;
+            --danger: #ef6b6b;
+            color-scheme: dark;
+        }
+    }
+    :root[data-theme="dark"] {
+        --bg: #0e1512; --card: #17211c; --fg: #e6efe9; --muted: #9db0a5; --line: #2a3a32;
+        --field: #101815; --field-line: #3c5045; --lock-bg: #1b2721; --hero: #0f4331; --hero-bar: #e0a31a;
+        --accent: #f08a54; --accent-fg: #1a0e06; --quiet: #34463c; --quiet-fg: #e6efe9;
+        --qty-bg: #2b2608; --qty-line: #8a7414; --calc: #7fdca9;
+        --s-seller: #4a5fcb;  --t-seller: #181e3d;
+        --s-buyer: #12929d;   --t-buyer: #0e2b2e;
+        --s-meta: #b8650a;    --t-meta: #302210;
+        --s-items: #238a50;   --t-items: #11301f;  --th-items: #1d3d2c;
+        --s-bank: #8d4fbf;    --t-bank: #281937;
+        --s-remarks: #c04848; --t-remarks: #301a1a;
+        --danger: #ef6b6b;
+        color-scheme: dark;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+        background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 14px; line-height: 1.45;
+        padding-block: 24px;
+        padding-left: max(16px, env(safe-area-inset-left, 0px));
+        padding-right: max(16px, env(safe-area-inset-right, 0px));
+    }
+    .wrap { max-width: 1060px; margin: 0 auto; }
+    .stack { display: flex; flex-direction: column; gap: 16px; }
+
+    /* ---------- Banner ---------- */
+    .hero { background: var(--hero); color: #fff; padding: 22px 24px 20px; border-radius: 8px; border-bottom: 5px solid var(--hero-bar); }
+    .hero h1 { margin: 0; font-size: 26px; letter-spacing: .01em; text-wrap: balance; }
+    .hero .store { margin: 6px 0 0; font-size: 13px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: #ffd978; }
+
+    /* ---------- Sections ---------- */
+    .sec { border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: var(--tc); }
+    .sec > h2 { margin: 0; padding: 10px 16px; background: var(--sc); color: var(--on-sec); font-size: 14px; letter-spacing: .06em; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .sec > .body { padding: 16px; }
+    .chip { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; background: rgba(255,255,255,.22); padding: 2px 10px; border-radius: 999px; }
+    .s-seller  { --sc: var(--s-seller);  --tc: var(--t-seller); }
+    .s-buyer   { --sc: var(--s-buyer);   --tc: var(--t-buyer); }
+    .s-meta    { --sc: var(--s-meta);    --tc: var(--t-meta); }
+    .s-items   { --sc: var(--s-items);   --tc: var(--t-items); }
+    .s-bank    { --sc: var(--s-bank);    --tc: var(--t-bank); }
+    .s-remarks { --sc: var(--s-remarks); --tc: var(--t-remarks); }
+
+    .fixed { line-height: 1.6; }
+    .fixed .nm { font-weight: 700; font-size: 15px; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+    .grid > *, .grid3 > * { min-width: 0; }
+    label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    input, textarea { width: 100%; padding: 8px 10px; background: var(--field); color: var(--fg); border: 1px solid var(--field-line); border-radius: 4px; font-size: 14px; font-family: inherit; }
+    input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+
+    /* ---------- Goods table ---------- */
+    .scroll { overflow-x: auto; border-radius: 6px; border: 1px solid var(--line); background: var(--card); }
+    table.entry { width: 100%; min-width: 940px; border-collapse: collapse; }
+    table.entry th { background: var(--th-items); color: var(--fg); text-align: left; font-size: 12px; padding: 9px 7px; border-bottom: 2px solid var(--s-items); white-space: nowrap; }
+    table.entry td { padding: 6px 7px; font-size: 13px; border-bottom: 1px solid var(--line); }
+    table.entry td.lk { background: var(--lock-bg); }
+    table.entry td.calc { font-weight: 600; color: var(--calc); }
+    table.entry td.c { text-align: center; }
+    table.entry .r { text-align: right; font-variant-numeric: tabular-nums; }
+    table.entry tfoot td { background: var(--th-items); font-weight: 700; border-bottom: 0; font-variant-numeric: tabular-nums; }
+    input.qty { width: 112px; text-align: right; background: var(--qty-bg); border-color: var(--qty-line); padding: 6px 8px; font-variant-numeric: tabular-nums; font-weight: 600; }
+    #sumLine { margin-top: 12px; text-align: right; font-weight: 700; font-size: 16px; font-variant-numeric: tabular-nums; }
+
+    button { background: var(--accent); color: var(--accent-fg); border: 0; padding: 11px 22px; border-radius: 6px; font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer; }
+    button.secondary { background: var(--quiet); color: var(--quiet-fg); }
+    .actions { margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    #formMsg { color: var(--danger); font-weight: 600; }
+
+    /* ---------- Invoice sheet (fixed white paper) ---------- */
+    .paper { background: #fff; color: #000; padding: 20px; border-radius: 4px; overflow-x: auto; border: 1px solid var(--line); }
+    .sheet { min-width: 780px; font-size: 12px; line-height: 1.45; color: #000; font-variant-numeric: tabular-nums; }
+    .sheet h1 { text-align: center; font-size: 22px; margin: 0 0 16px; }
+    .hdr { display: grid; grid-template-columns: 55% 45%; border: 1px solid #000; }
+    .hdr .left { border-right: 1px solid #000; display: flex; flex-direction: column; }
+    .hdr .seller { padding: 8px 10px; border-bottom: 1px solid #000; min-height: 150px; }
+    .hdr .buyer { padding: 8px 10px; flex: 1; }
+    .hdr .nm { font-weight: 700; font-size: 14px; }
+    .hdr .right { display: grid; grid-template-columns: 1fr 1fr; }
+    .cell { border-right: 1px solid #000; border-bottom: 1px solid #000; padding: 5px 8px; min-height: 44px; font-size: 11px; }
+    .cell:nth-child(2n) { border-right: 0; }
+    .cell:nth-last-child(-n+2) { border-bottom: 0; }
+    .cell .val { font-weight: 700; font-size: 12px; }
+    table.inv { width: 100%; border-collapse: collapse; border: 1px solid #000; margin-top: -1px; font-size: 11.5px; }
+    table.inv th, table.inv td { border: 1px solid #333; padding: 9px 6px; }
+    table.inv th { background: #efefef; text-align: left; font-size: 11px; }
+    table.inv td.r, table.inv th.r { text-align: right; }
+    table.inv td.c { text-align: center; }
+    .sumbox { text-align: right; margin: 12px 8px 0 0; line-height: 1.8; }
+    .gt { display: flex; justify-content: space-between; border-top: 1px solid #000; margin-top: 12px; padding: 10px 8px 4px; font-size: 15px; font-weight: 700; }
+    .words { font-weight: 700; margin: 8px 8px 0; }
+    .gstan { margin: 8px 0 0; font-weight: 700; font-size: 13px; }
+    table.gst { width: 100%; border-collapse: collapse; border: 1px solid #000; margin-top: 4px; font-size: 11.5px; }
+    table.gst th, table.gst td { border: 1px solid #333; padding: 6px; }
+    table.gst th { background: #efefef; text-align: left; }
+    .foot { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #000; margin-top: 60px; }
+    .foot .l { padding: 10px; border-right: 1px solid #000; }
+    .foot .bank { padding: 8px 10px; font-size: 11px; line-height: 1.5; border-bottom: 1px solid #000; flex: 1; }
+    .foot .sig { padding: 8px 10px; text-align: right; font-size: 11px; }
+    .cg { text-align: center; font-size: 11px; margin-top: 18px; }
+
+    @media (max-width: 700px) { .grid, .grid3 { grid-template-columns: 1fr; } .hero h1 { font-size: 21px; } }
+
+    [hidden] { display: none !important; }
+    @page { size: A4; margin: 10mm; }
+    @media print {
+        body { background: #fff; padding: 0; }
+        .no-print { display: none !important; }
+        .wrap { max-width: none; }
+        .paper { border: 0; padding: 0; overflow: visible; }
+        .sheet { min-width: 0; }
+    }
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+
+<!-- ================= INPUT FORM ================= -->
+<div id="formView" class="stack">
+    <header class="hero">
+        <h1>Invoice-cum-Bill of Supply</h1>
+        <p class="store">M/S MAA BHAWANI KIRANA STORE</p>
+    </header>
+
+    <form id="f" class="stack" onsubmit="return false;">
+
+        <section class="sec s-seller">
+            <h2><span>Seller</span><span class="chip">Fixed</span></h2>
+            <div class="body fixed" id="sellerFixed"></div>
+        </section>
+
+        <section class="sec s-buyer">
+            <h2><span>Buyer (Bill to)</span></h2>
+            <div class="body">
+                <div><label for="buyerName">Buyer Name</label><input id="buyerName" name="buyerName" required></div>
+                <div class="grid" style="margin-top:14px">
+                    <div><label for="buyerAddress">Address</label><textarea id="buyerAddress" name="buyerAddress" rows="2"></textarea></div>
+                    <div><label for="buyerExtra">Extra lines (e.g. DISE Code)</label><textarea id="buyerExtra" name="buyerExtra" rows="2"></textarea></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="sec s-meta">
+            <h2><span>Invoice Details</span></h2>
+            <div class="body grid3">
+                <div><label for="invoiceNo">Invoice No.</label><input id="invoiceNo" name="invoiceNo" required></div>
+                <div><label for="invoiceDate">Dated</label><input id="invoiceDate" type="date" name="invoiceDate" required></div>
+                <div><label for="deliveryNote">Delivery Note</label><input id="deliveryNote" name="deliveryNote"></div>
+                <div><label for="otherRef">Other References</label><input id="otherRef" name="otherRef"></div>
+                <div><label for="refNo">Reference No. &amp; Date</label><input id="refNo" name="refNo"></div>
+                <div><label for="buyerOrderNo">Buyer's Order No.</label><input id="buyerOrderNo" name="buyerOrderNo"></div>
+                <div><label for="dispatchDocNo">Dispatch Doc No.</label><input id="dispatchDocNo" name="dispatchDocNo"></div>
+                <div><label for="deliveryNoteDate">Delivery Note Date</label><input id="deliveryNoteDate" type="date" name="deliveryNoteDate"></div>
+                <div><label for="dispatchedThrough">Dispatched through</label><input id="dispatchedThrough" name="dispatchedThrough"></div>
+                <div><label for="destination">Destination</label><input id="destination" name="destination"></div>
+                <div><label for="lrNo">Bill of Lading / LR-RR No.</label><input id="lrNo" name="lrNo"></div>
+                <div><label for="lrDate">LR-RR Date</label><input id="lrDate" type="date" name="lrDate"></div>
+                <div><label for="motorVehicleNo">Motor Vehicle No.</label><input id="motorVehicleNo" name="motorVehicleNo"></div>
+            </div>
+        </section>
+
+        <section class="sec s-items">
+            <h2><span>Description of Goods</span><span class="chip">Enter quantity</span></h2>
+            <div class="body">
+                <div class="scroll">
+                <table class="entry" id="items">
+                    <thead><tr>
+                        <th>Sl. No.</th><th>Description of Goods</th><th class="r">Quantity</th><th class="r">Rate</th><th>Per</th>
+                        <th class="r">CGST Rate</th><th class="r">Taxable Value</th><th class="r">CGST Amount</th>
+                        <th class="r">SGST Rate</th><th class="r">SGST Amount</th><th class="r">Total Amount</th>
+                    </tr></thead>
+                    <tbody></tbody>
+                    <tfoot><tr>
+                        <td colspan="2">Total</td><td class="r" id="tQty">0.000</td><td></td><td></td><td></td>
+                        <td class="r" id="tTax">0.00</td><td class="r" id="tCg">0.00</td><td></td><td class="r" id="tSg">0.00</td><td class="r" id="tAmt">0.00</td>
+                    </tr></tfoot>
+                </table>
+                </div>
+                <div id="sumLine"></div>
+                <div class="actions"><button type="button" class="secondary" onclick="clearQty()">Clear quantities</button></div>
+            </div>
+        </section>
+
+        <section class="sec s-bank">
+            <h2><span>Company's Bank Details</span><span class="chip">Fixed</span></h2>
+            <div class="body fixed" id="bankFixed"></div>
+        </section>
+
+        <section class="sec s-remarks">
+            <h2><span>Remarks &amp; Declaration</span></h2>
+            <div class="body grid">
+                <div><label for="remarks">Remarks</label><textarea id="remarks" name="remarks" rows="3"></textarea></div>
+                <div><label for="declaration">Declaration</label><textarea id="declaration" name="declaration" rows="3">We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.</textarea></div>
+            </div>
+        </section>
+
+        <div class="actions" style="margin-top:0"><button type="button" onclick="extractInvoice()">Extract Invoice</button><span id="formMsg" role="alert"></span></div>
+    </form>
+</div>
+
+<!-- ================= INVOICE VIEW ================= -->
+<div id="invoiceView" hidden>
+    <div class="paper"><div id="sheet" class="sheet"></div></div>
+    <div class="actions no-print">
+        <button type="button" onclick="window.print()">Print / Save as PDF</button>
+        <button type="button" class="secondary" onclick="backToForm()">Edit Details</button>
+    </div>
+</div>
+
+</div>
+
+<script>
+    /* ---------- fixed data (from the sample invoice) ---------- */
+    var TITLE = 'Invoice-cum-Bill of Supply';
+    var SELLER = {
+        name: 'M/S MAA BHAWANI KIRANA STORE',
+        address: 'Belhar, ward no. - 6 H.P GAS GRAMIN VITRAK\nBelhar Banka\nBihar',
+        extra: 'C.F.M.S Payee ID - 6858968CR',
+        gstin: '10NZGPK1881M1ZY', state: 'Bihar', code: '10'
+    };
+    var BANK = { holder: 'M/S MAA BHAWANI KIRANA STORE', bank: 'HDFC BANK A/C', acNo: '50200108548709', branch: 'MUNGER & HDFC0011735' };
+    var UNIT = 'Kgs';
+    // [description, rate, GST % per side (CGST = SGST)]
+    var ITEMS = [
+        ['Masur Dal', 85, 0], ['Chana Dal', 90, 0], ['Soybean', 120, 2.5], ['Khada Chana', 85, 0],
+        ['Patato', 20, 0], ['Onion', 40, 0], ['Green Vegetables', 35, 0], ['Mustard Oil', 160, 2.5],
+        ['Turmeric Powder', 240, 2.5], ['Mixed Spices', 300, 2.5], ['Cumin Powder', 550, 2.5], ['Cumin Seed', 450, 2.5],
+        ['Chili Powder', 250, 2.5], ['Panchforan', 230, 2.5], ['Salt', 25, 0], ['Firewoo', 10, 0]
+    ];
+
+    /* ---------- helpers ---------- */
+    var ONES = ["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
+    var TENS = ["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
+    var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    function nl2br(s) { return esc(s).replace(/\r?\n/g, '<br>'); }
+    function blank(s) { return s == null || String(s).trim() === ''; }
+    function num(s) { var n = parseFloat(s); return isNaN(n) ? 0 : n; }
+    function r2(v) { return Math.round(parseFloat((v * 100).toFixed(6))) / 100; }
+    function money(v) { return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+    function pct(v) { return parseFloat(v.toFixed(2)) + '%'; }
+    function fmtDate(iso) {
+        if (blank(iso)) return '';
+        var p = iso.split('-');
+        if (p.length !== 3) return iso;
+        return parseInt(p[2], 10) + '-' + MONTHS[parseInt(p[1], 10) - 1] + '-' + p[0].slice(-2);
+    }
+    function below100(n) { return n < 20 ? ONES[n] : TENS[Math.floor(n / 10)] + (n % 10 ? ' ' + ONES[n % 10] : ''); }
+    function below1000(n) {
+        var s = '';
+        if (n >= 100) { s = ONES[Math.floor(n / 100)] + ' Hundred'; n %= 100; if (n) s += ' '; }
+        return s + below100(n);
+    }
+    function words(n) {   // Indian numbering: Thousand / Lakh / Crore
+        if (n === 0) return 'Zero';
+        var out = [];
+        var crore = Math.floor(n / 10000000); n %= 10000000;
+        var lakh = Math.floor(n / 100000);    n %= 100000;
+        var th = Math.floor(n / 1000);        n %= 1000;
+        if (crore) out.push(words(crore) + ' Crore');
+        if (lakh) out.push(below100(lakh) + ' Lakh');
+        if (th) out.push(below100(th) + ' Thousand');
+        if (n) out.push(below1000(n));
+        return out.join(' ');
+    }
+    function cell(label, value) {
+        return '<div class="cell"><div class="lbl">' + esc(label) + '</div><div class="val">' + esc(value) + '</div></div>';
+    }
+    function sellerHtml() {
+        return '<div class="nm">' + esc(SELLER.name) + '</div>' + nl2br(SELLER.address) + '<br>' + nl2br(SELLER.extra) + '<br>' +
+            'GSTIN/UIN: ' + esc(SELLER.gstin) + '<br>State Name: ' + esc(SELLER.state) + ', Code: ' + esc(SELLER.code);
+    }
+    function bankLines() {
+        return 'A/c Holder: ' + esc(BANK.holder) + '<br>Bank: ' + esc(BANK.bank) + '<br>A/c No.: ' + esc(BANK.acNo) +
+            '<br>Branch &amp; IFSC: ' + esc(BANK.branch);
+    }
+
+    /* ---------- goods table ---------- */
+    function buildRows() {
+        var html = '';
+        ITEMS.forEach(function (it, i) {
+            html += '<tr>' +
+                '<td class="c lk">' + (i + 1) + '</td>' +
+                '<td class="lk">' + esc(it[0]) + '</td>' +
+                '<td><input class="qty" id="qty' + i + '" type="number" min="0" step="any" inputmode="decimal" aria-label="' + esc(it[0]) + ' quantity in ' + UNIT + '" oninput="calc()"></td>' +
+                '<td class="r lk">' + money(it[1]) + '</td>' +
+                '<td class="lk">' + UNIT + '</td>' +
+                '<td class="r lk">' + pct(it[2]) + '</td>' +
+                '<td class="r calc" data-c="tx">0.00</td>' +
+                '<td class="r calc" data-c="cg">0.00</td>' +
+                '<td class="r lk">' + pct(it[2]) + '</td>' +
+                '<td class="r calc" data-c="sg">0.00</td>' +
+                '<td class="r calc" data-c="tt">0.00</td></tr>';
+        });
+        document.querySelector('#items tbody').innerHTML = html;
+    }
+    function lineValues(i) {
+        var qty = num(document.getElementById('qty' + i).value);
+        var rate = ITEMS[i][1], g = ITEMS[i][2];
+        var taxable = r2(qty * rate);
+        var cg = r2(taxable * g / 100), sg = r2(taxable * g / 100);
+        return { desc: ITEMS[i][0], qty: qty, rate: rate, cr: g, sr: g, taxable: taxable, cg: cg, sg: sg, amt: r2(taxable + cg + sg) };
+    }
+    function calc() {
+        var rows = document.querySelectorAll('#items tbody tr');
+        var tq = 0, tx = 0, cg = 0, sg = 0, tt = 0;
+        rows.forEach(function (tr, i) {
+            var l = lineValues(i);
+            tr.querySelector('[data-c=tx]').textContent = money(l.taxable);
+            tr.querySelector('[data-c=cg]').textContent = money(l.cg);
+            tr.querySelector('[data-c=sg]').textContent = money(l.sg);
+            tr.querySelector('[data-c=tt]').textContent = money(l.amt);
+            tq += l.qty; tx += l.taxable; cg += l.cg; sg += l.sg; tt += l.amt;
+        });
+        document.getElementById('tQty').textContent = tq.toFixed(3);
+        document.getElementById('tTax').textContent = money(r2(tx));
+        document.getElementById('tCg').textContent = money(r2(cg));
+        document.getElementById('tSg').textContent = money(r2(sg));
+        document.getElementById('tAmt').textContent = money(r2(tt));
+        document.getElementById('sumLine').textContent = 'Grand Total (rounded): ₹ ' + money(Math.round(tt));
+    }
+    function clearQty() {
+        ITEMS.forEach(function (it, i) { document.getElementById('qty' + i).value = ''; });
+        calc();
+        document.getElementById('qty0').focus();
+    }
+
+    /* ---------- extract invoice ---------- */
+    function extractInvoice() {
+        var msg = document.getElementById('formMsg');
+        msg.textContent = '';
+        var form = document.getElementById('f');
+        if (!form.reportValidity()) { msg.textContent = 'Fill in the required fields first.'; return; }
+        var g = function (n) { return form.elements[n].value; };
+
+        var lines = [];
+        ITEMS.forEach(function (it, i) {
+            var l = lineValues(i);
+            if (l.qty > 0) lines.push(l);
+        });
+        if (!lines.length) { msg.textContent = 'Enter a quantity for at least one item.'; return; }
+
+        var totTaxable = 0, totCg = 0, totSg = 0, totQtyN = 0, an = {};
+        var rowsHtml = '';
+        lines.forEach(function (l, i) {
+            totTaxable += l.taxable; totCg += l.cg; totSg += l.sg; totQtyN += l.qty;
+            var key = pct(l.cr) + '|' + pct(l.sr);
+            if (!an[key]) an[key] = { cr: l.cr, sr: l.sr, taxable: 0, cg: 0, sg: 0 };
+            an[key].taxable += l.taxable; an[key].cg += l.cg; an[key].sg += l.sg;
+            rowsHtml += '<tr><td class="c">' + (i + 1) + '</td><td>' + esc(l.desc) + '</td>' +
+                '<td class="r">' + l.qty.toFixed(3) + '</td><td class="r">' + money(l.rate) + '</td><td>' + UNIT + '</td>' +
+                '<td class="r">' + pct(l.cr) + '</td><td class="r">' + money(l.taxable) + '</td><td class="r">' + money(l.cg) + '</td>' +
+                '<td class="r">' + pct(l.sr) + '</td><td class="r">' + money(l.sg) + '</td><td class="r">' + money(l.amt) + '</td></tr>';
+        });
+        totTaxable = r2(totTaxable); totCg = r2(totCg); totSg = r2(totSg);
+        var sub = r2(totTaxable + totCg + totSg);
+        var grand = Math.round(sub);
+        var roundOff = r2(grand - sub);
+
+        var analysis = Object.keys(an).map(function (k) { return an[k]; })
+            .sort(function (a, b) { return (a.cr + a.sr) - (b.cr + b.sr); });
+        var anHtml = analysis.map(function (a) {
+            return '<tr><td>' + pct(a.cr) + ' + ' + pct(a.sr) + '</td><td class="r">' + money(r2(a.taxable)) + '</td>' +
+                '<td class="r">' + money(r2(a.cg)) + '</td><td class="r">' + money(r2(a.sg)) + '</td>' +
+                '<td class="r">' + money(r2(a.cg + a.sg)) + '</td></tr>';
+        }).join('');
+
+        var lrVal = (blank(g('lrNo')) ? '' : g('lrNo').trim() + ' ') + (blank(g('lrDate')) ? '' : 'dt. ' + fmtDate(g('lrDate')));
+
+        var buyerHtml = 'Buyer (Bill to)<br><div class="nm">' + esc(g('buyerName')) + '</div>' +
+            (blank(g('buyerAddress')) ? '' : nl2br(g('buyerAddress')) + '<br>') +
+            (blank(g('buyerExtra')) ? '' : nl2br(g('buyerExtra')));
+
+        document.getElementById('sheet').innerHTML =
+            '<h1>' + esc(TITLE) + '</h1>' +
+            '<div class="hdr"><div class="left"><div class="seller">' + sellerHtml() + '</div><div class="buyer">' + buyerHtml + '</div></div>' +
+            '<div class="right">' +
+                cell('Invoice No.', g('invoiceNo')) + cell('Dated', fmtDate(g('invoiceDate'))) +
+                cell('Delivery Note', g('deliveryNote')) + cell('Other References', g('otherRef')) +
+                cell('Reference No. & Date.', g('refNo')) + cell("Buyer's Order No.", g('buyerOrderNo')) +
+                cell('Dispatch Doc No.', g('dispatchDocNo')) + cell('Delivery Note Date', fmtDate(g('deliveryNoteDate'))) +
+                cell('Dispatched through', g('dispatchedThrough')) + cell('Destination', g('destination')) +
+                cell('Bill of Lading/LR-RR No.', lrVal) + cell('Motor Vehicle No.', g('motorVehicleNo')) +
+            '</div></div>' +
+            '<table class="inv"><thead><tr><th>Sl.<br>No.</th><th>Description of Goods</th><th class="r">Quantity</th><th class="r">Rate</th><th>Per</th>' +
+            '<th class="r">CGST<br>Rate</th><th class="r">Taxable<br>Value</th><th class="r">CGST<br>Amount</th>' +
+            '<th class="r">SGST<br>Rate</th><th class="r">SGST<br>Amount</th><th class="r">Total<br>Amount</th></tr></thead>' +
+            '<tbody>' + rowsHtml + '</tbody></table>' +
+            '<div class="sumbox"><strong>Taxable Value: ₹ ' + money(totTaxable) + '</strong><br>' +
+                'CGST: ₹ ' + money(totCg) + ' &nbsp;&nbsp; SGST: ₹ ' + money(totSg) + '<br>' +
+                'Round Off: ₹ ' + money(roundOff) + '</div>' +
+            '<div class="gt"><span>Total Quantity: ' + totQtyN.toFixed(3) + ' ' + UNIT + '</span><span>Grand Total: ₹ ' + money(grand) + '</span></div>' +
+            '<div class="words">Amount Chargeable (in words): INR ' + words(grand) + ' Only</div>' +
+            '<div class="gstan">GST Analysis</div>' +
+            '<table class="gst"><thead><tr><th>GST Rate</th><th>Taxable Value</th><th>CGST</th><th>SGST</th><th>Total GST</th></tr></thead>' +
+            '<tbody>' + anHtml + '</tbody></table>' +
+            '<div class="foot"><div class="l"><strong>Remarks:</strong><br>' + nl2br(g('remarks')) +
+                '<br><br><strong>Declaration</strong><br><span style="font-size:11px">' + nl2br(g('declaration')) + '</span></div>' +
+            '<div style="display:flex;flex-direction:column"><div class="bank"><strong>Company\'s Bank Details</strong><br>' + bankLines() + '</div>' +
+                '<div class="sig"><strong>for ' + esc(SELLER.name) + '</strong><br><br><br>Authorised Signatory</div></div></div>' +
+            '<div class="cg">This is a Computer Generated Invoice</div>';
+
+        document.getElementById('formView').hidden = true;
+        document.getElementById('invoiceView').hidden = false;
+        window.scrollTo(0, 0);
+    }
+    function backToForm() {
+        document.getElementById('invoiceView').hidden = true;
+        document.getElementById('formView').hidden = false;
+    }
+
+    /* ---------- init ---------- */
+    (function () {
+        document.getElementById('sellerFixed').innerHTML = sellerHtml();
+        document.getElementById('bankFixed').innerHTML = bankLines();
+        buildRows();
+        calc();
+        document.getElementById('items').addEventListener('keydown', function (e) {
+            if (e.key !== 'Enter' || !e.target.classList.contains('qty')) return;
+            e.preventDefault();
+            var all = Array.prototype.slice.call(document.querySelectorAll('input.qty'));
+            var next = all[all.indexOf(e.target) + 1];
+            if (next) next.focus();
+        });
+        var d = new Date();
+        var m = ('0' + (d.getMonth() + 1)).slice(-2), day = ('0' + d.getDate()).slice(-2);
+        document.getElementById('invoiceDate').value = d.getFullYear() + '-' + m + '-' + day;
+    })();
+</script>
+
+</body>
+</html>
